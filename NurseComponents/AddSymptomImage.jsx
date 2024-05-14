@@ -1,111 +1,180 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TextInput, Image, TouchableOpacity, ScrollView, Alert, ImageBackground } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import axios from 'axios';
-import  AsyncStorage  from '@react-native-async-storage/async-storage';
-import { useEmail } from '../Context/EmailContext';
-import NurseHeader from './NurseHeader';
-import NurseSidebar from './Sidebar';
-import { Platform } from 'react-native';
-import { API_BASE_URL } from '../config';
-import { FontAwesomeIcon } from '@fortawesome/react-native-fontawesome';
-import { faImage, faUpload } from '@fortawesome/free-solid-svg-icons';
-import { FontAwesome } from '@expo/vector-icons';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useFocusEffect } from '@react-navigation/native';
+import {
+  StyleSheet,
+  View,
+  Text, 
+  TextInput,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  ImageBackground,
+  Button,
+} from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { Camera } from "expo-camera";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEmail } from "../Context/EmailContext";
+import NurseHeader from "./NurseHeader";
+import NurseSidebar from "./Sidebar";
+import { Platform, PermissionsAndroid } from "react-native";
+import { API_BASE_URL } from "../config";
+import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
+import { faCamera, faImage, faUpload } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesome } from "@expo/vector-icons";
 import BG_SymptomImages from "../Nurse_Comp_Images/BG_SymptomImages.jpg";
+import CaptureImageScreen from "./clickSymptomImg";
+
 
 export default function AddSymptomImage({ navigation, route }) {
-  const [image, setImageUrl] = useState('');
-  const [description, setDescription] = useState('');
+  const [image, setImageUrl] = useState("");
+  const [description, setDescription] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [previewImage, setPreviewImage] = useState(null);
   const { email } = useEmail();
   const patientId = route.params.patientId;
+  const [hasPermission, setHasPermission] = useCameraPermissions();
+  const cameraRef = useRef(null);
 
-  useEffect(() => {
-    (async () => {
-      if (Platform.OS !== 'web') {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          alert('Sorry, we need camera roll permissions to make this work!');
-        }
-      }
-    })();
-  }, []);
+  const handleCaptureImage = async () => {
+    navigation.navigate('CaptureImageScreen',{patientId});
+  }
+  
+  const setPhoto = useCallback((photo) => {
+    console.log("in preview:", photo);
+    setPreviewImage(photo);
+    setImageUrl(photo);
+}, []);
 
-  const pickImage = async () => {
+
+useFocusEffect(
+  useCallback(() => {
+    const photo = route.params?.photo; 
+    if (photo) {
+      setPhoto(photo);
+      // Optionally clear the photo parameter to prevent reuse
+      navigation.setParams({ photo: null });
+    }
+  }, [route.params?.photo, navigation, setPhoto])
+);
+
+  const handlePickImage = async () => {
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [4, 3],
         quality: 1,
       });
-
-      if (result) {
+      if (!result.canceled) {
         const selectedAsset = result.assets[0];
         const selectedImageUri = selectedAsset.uri;
-        setPreviewImage(selectedImageUri);
-        setImageUrl(selectedImageUri);
+
+        const response = await fetch(selectedImageUri);
+        const blob = await response.blob();
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64String = reader.result;
+          setPreviewImage(base64String);
+          setImageUrl(base64String);
+        };
+        reader.readAsDataURL(blob);
       } else {
-        console.log('Image picking cancelled by the user');
+        Alert.alert("Image picking cancelled", "You cancelled image picking.");
       }
     } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick an image');
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick an image");
     }
   };
+ 
+
+
+  const renderErrorMessage = (errorMessage) => (
+    <Text style={[styles.errorMessage, { color: "red" }]}>{errorMessage}</Text>
+  );
+  
 
   const SemicircleBackground = ({ children, style }) => {
-    return (
-        <View style={[styles.background, style]}>
-            {children}
-        </View>
-    );
-};
+    return <View style={[styles.background, style]}>{children}</View>;
+  };
 
   const handleImageUpload = async () => {
     try {
-      const regex = /.*\.(png|jpg|jpeg)$/;
-      if (!regex.test(image)) {
-        Alert.alert('Error', 'Image URL must be in .png or .jpg format');
-        return;
-      }
       const textRegex = /^[a-zA-Z0-9\s\.,\-'"!?]+$/;
       if (!textRegex.test(description)) {
-        Alert.alert('Error', 'Invalid description. Please enter valid text');
+        Alert.alert("Error", "Invalid description. Please enter valid text");
         return;
       }
-      const token = await AsyncStorage.getItem('token');
-      const response = await axios.post(`${API_BASE_URL}/nurse/addSymptomImages/${patientId}`, { image, description },{
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const token = await AsyncStorage.getItem("token");
+      const response = await axios.post(
+        `${API_BASE_URL}/nurse/addSymptomImages/${patientId}`,
+        { image, description },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       setPreviewImage(null);
-      setDescription('');
-      console.log('Image uploaded successfully');
-      Alert.alert('Success', 'Image uploaded successfully');
+      setDescription("");
+      console.log("Image uploaded successfully");
+      Alert.alert("Success", "Image uploaded successfully");
     } catch (error) {
-      console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Failed to upload image');
+      if (error.response && error.response.status === 500) {
+        Alert.alert(
+          "Error",
+          "Session Expired !!Please Log in again",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                AsyncStorage.removeItem("token");
+                navigation.navigate("HomePage");
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      } else {
+        console.error("Error uploading image:", error);
+        Alert.alert("Error", "Failed to upload image");
+      }
     }
   };
 
   return (
     <View style={styles.container}>
       <NurseHeader onPress={() => setIsSidebarOpen(!isSidebarOpen)} />
-      <ImageBackground
-        source={BG_SymptomImages}
-        style={styles.content}
-      >
-        {isSidebarOpen && <NurseSidebar navigation={navigation} email={email} activeRoute="NursePatient_Details"/>}
+      <ImageBackground source={BG_SymptomImages} style={styles.content}>
+        {isSidebarOpen && (
+          <NurseSidebar
+            navigation={navigation}
+            email={email}
+            activeRoute="NursePatient_Details"
+          />
+        )}
         <ScrollView contentContainerStyle={styles.formContainer}>
-        <Text style={styles.headerText}>Capture Patient Symptoms: Upload Images with Descriptions</Text>
+          <Text style={styles.headerText}>
+            Capture Patient Symptoms: Upload Images with Descriptions
+          </Text>
           <View style={styles.formContent}>
             <View style={styles.leftContent}>
-              <TouchableOpacity style={styles.button} onPress={pickImage}>
+            <TouchableOpacity
+                    style={styles.button}
+                    onPress={handleCaptureImage}
+                  >
+                    <FontAwesomeIcon icon={faCamera} style={styles.icon} />
+                    <Text style={styles.buttonText}>Click Image</Text>
+                  </TouchableOpacity>
+              <TouchableOpacity style={styles.button} onPress={handlePickImage}>
                 <FontAwesomeIcon icon={faImage} style={styles.icon} />
-                <Text style={styles.buttonText}>Pick an image from gallery</Text>
+                <Text style={styles.buttonText}>
+                  Pick an image from gallery
+                </Text>
               </TouchableOpacity>
               <TextInput
                 style={styles.input}
@@ -113,6 +182,11 @@ export default function AddSymptomImage({ navigation, route }) {
                 value={description}
                 onChangeText={setDescription}
               />
+              {description !== "" &&
+                !/^[a-zA-Z0-9\s]+$/.test(description) &&
+                renderErrorMessage(
+                  "Description must contain only alphabets, numbers and spaces."
+                )}
               <TouchableOpacity
                 style={[styles.button, { opacity: previewImage ? 1 : 0.5 }]}
                 onPress={handleImageUpload}
@@ -124,32 +198,43 @@ export default function AddSymptomImage({ navigation, route }) {
             </View>
             {previewImage && (
               <View style={styles.rightContent}>
-                <Image source={{ uri: previewImage }} style={styles.imagePreview} />
+                <Image
+                  source={{ uri: previewImage }}
+                  style={styles.imagePreview}
+                />
               </View>
             )}
           </View>
           <View style={styles.footerContainer}>
-    {/* Back button */}
-    <SemicircleBackground style={styles.lbackground}>
-  <TouchableOpacity onPress={() => navigation.navigate('NursePatient_Dashboard', { patientId })} style={styles.footerItem}>
-    <View style={styles.lfooterIconContainer}>
-      <FontAwesome name="arrow-left" size={24} color="teal" />
-    </View>
-    <Text style={styles.footerText1}>Back</Text>
-  </TouchableOpacity>
-</SemicircleBackground>
+            {/* Back button */}
+            <SemicircleBackground style={styles.lbackground}>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate("NursePatient_Dashboard", { patientId })
+                }
+                style={styles.footerItem}
+              >
+                <View style={styles.lfooterIconContainer}>
+                  <FontAwesome name="arrow-left" size={24} color="teal" />
+                </View>
+                <Text style={styles.footerText1}>Back</Text>
+              </TouchableOpacity>
+            </SemicircleBackground>
 
-{/* View button */}
-<SemicircleBackground style={styles.rbackground}>
-  <TouchableOpacity onPress={() => navigation.navigate('ViewSymptomImage', { patientId })} style={styles.footerItem}>
-    <View style={styles.rfooterIconContainer}>
-      <FontAwesome name="eye" size={24} color="teal" />
-    </View>
-    <Text style={styles.footerText2}>View</Text>
-  </TouchableOpacity>
-</SemicircleBackground>
-
-</View>
+            <SemicircleBackground style={styles.rbackground}>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate("ViewSymptomImage", { patientId })
+                }
+                style={styles.footerItem}
+              >
+                <View style={styles.rfooterIconContainer}>
+                  <FontAwesome name="eye" size={24} color="teal" />
+                </View>
+                <Text style={styles.footerText2}>View</Text>
+              </TouchableOpacity>
+            </SemicircleBackground>
+          </View>
         </ScrollView>
       </ImageBackground>
     </View>
@@ -287,3 +372,6 @@ const styles = StyleSheet.create({
         marginTop: 20,
     }, 
 });
+
+
+

@@ -34,7 +34,7 @@ export default function EditSymptoms({ navigation, route }) {
   console.log(symptomid);
   useEffect(() => {
     fetchOldSymptoms();
-  }, []);
+  }, [fetchOldSymptoms]);
 
   const fetchOldSymptoms = async () => {
     try {
@@ -49,8 +49,21 @@ export default function EditSymptoms({ navigation, route }) {
       const oldSymptoms = response.data;
       setSymptoms(oldSymptoms);
     } catch (error) {
-      console.error("Error fetching old symptoms:", error);
-    }
+      if(error.response && error.response.status===500)
+      {
+      Alert.alert(
+        'Error',
+        'Session Expired !!Please Log in again',
+        [
+          { text: 'OK', onPress: () => {
+            AsyncStorage.removeItem('token');
+            navigation.navigate("HomePage")} }
+        ],
+        { cancelable: false }
+      );
+    }else{
+      console.error("Error fetching symptoms:", error);
+    }}
   };
 
   const SemicircleBackground = ({ children, style }) => {
@@ -86,6 +99,7 @@ export default function EditSymptoms({ navigation, route }) {
 
       console.log("Symptoms edited successfully:", response.data);
       Alert.alert("Symptoms edited successfully");
+      navigation.navigate('viewSymptoms',{patientId});
 
     //   setSymptoms({
     //     symptom1: "",
@@ -95,9 +109,26 @@ export default function EditSymptoms({ navigation, route }) {
     //     symptom5: "",
     //   });
     } catch (error) {
-      console.error("Error editing Symptoms:", error);
-    }
+      if(error.response && error.response.status===500)
+      {
+      Alert.alert(
+        'Error',
+        'Session Expired !!Please Log in again',
+        [
+          { text: 'OK', onPress: () => {
+            AsyncStorage.removeItem('token');
+            navigation.navigate("HomePage")} }
+        ],
+        { cancelable: false }
+      );
+    }else{
+      console.error("Error editing symptoms:", error);
+    }}
   };
+
+  const renderErrorMessage = (errorMessage) => (
+    <Text style={[styles.errorMessage, { color: 'red' }]}>{errorMessage}</Text>
+);
 
   const validateInputs = () => {
     if (!isValidText(symptoms.symptom1)) {
@@ -170,6 +201,7 @@ export default function EditSymptoms({ navigation, route }) {
                       <FontAwesome name="times-circle" size={24} color="teal" />
                     </TouchableOpacity>
                   </View>
+                  {symptoms.symptom1 !== '' && !/^[a-zA-Z\s]+$/.test(symptoms.symptom1) && renderErrorMessage('Symptom 1 must contain only alphabets and spaces.')}
                 </View>
                 <View style={styles.inputContainer}>
                   <Text style={styles.label}>Symptom 3:</Text>
@@ -186,6 +218,7 @@ export default function EditSymptoms({ navigation, route }) {
                       <FontAwesome name="times-circle" size={24} color="teal" />
                     </TouchableOpacity>
                     </View>
+                    {symptoms.symptom3 !== '' && !/^[a-zA-Z\s]+$/.test(symptoms.symptom3) && renderErrorMessage('Symptom 3 must contain only alphabets and spaces.')}
                 </View>
                 <View style={styles.inputContainer}>
                   <Text style={styles.label}>Symptom 5:</Text>
@@ -202,11 +235,12 @@ export default function EditSymptoms({ navigation, route }) {
                       <FontAwesome name="times-circle" size={24} color="teal" />
                     </TouchableOpacity>
                     </View>
+                    {symptoms.symptom5 !== '' && !/^[a-zA-Z\s]+$/.test(symptoms.symptom5) && renderErrorMessage('Symptom 5 must contain only alphabets and spaces.')}
                 </View>
               </View>
               <View style={styles.inputColumn}>
                 <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Symptom 2:</Text>
+                  <Text style={styles.label}>Symptom 2:<Text style={styles.redStar}>*</Text> </Text>
                   <View style={styles.inputWithButton}>
                   <TextInput
                     style={styles.input}
@@ -220,6 +254,7 @@ export default function EditSymptoms({ navigation, route }) {
                       <FontAwesome name="times-circle" size={24} color="teal" />
                     </TouchableOpacity>
                     </View>
+                    {symptoms.symptom2 !== '' && !/^[a-zA-Z\s]+$/.test(symptoms.symptom2) && renderErrorMessage('Symptom 2 must contain only alphabets and spaces.')}
                 </View>
                 <View style={styles.inputContainer}>
                   <Text style={styles.label}>Symptom 4:</Text>
@@ -236,6 +271,7 @@ export default function EditSymptoms({ navigation, route }) {
                       <FontAwesome name="times-circle" size={24} color="teal" />
                     </TouchableOpacity>
                 </View>
+                {symptoms.symptom4 !== '' && !/^[a-zA-Z\s]+$/.test(symptoms.symptom4) && renderErrorMessage('Symptom 4 must contain only alphabets and spaces.')}
                 </View>
               </View>
             </View>

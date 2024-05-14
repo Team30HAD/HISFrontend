@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import axios from 'axios'; // Import axios library
+import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView} from 'react-native';
+import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEmail } from '../Context/EmailContext';
 import { API_BASE_URL } from '../config';
@@ -16,15 +16,40 @@ const clearAsyncStorage = async () => {
 };
 
 const NurseSidebar = ({ navigation, nurse, activeRoute }) => {
-  //const [activeOption, setActiveOption] = useState(null);
   const { email } = useEmail();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [nurseDetails, setNurseDetails] = useState(null);
   const [nurseSchedule, setNurseSchedule] = useState([]);
   const [nurseId, setNurseId] = useState(null); 
 
+  
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const logoutUser = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        const response = await fetch(`${API_BASE_URL}/nurse/logout/${email}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (response.ok) {
+          await AsyncStorage.removeItem('token');
+          navigation.navigate('HomePage');
+        } else {
+          console.error('Failed to log out:', response.statusText);
+        }
+      } else {
+        console.error('Token not found in AsyncStorage');
+      }
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
   };
 
   useEffect(() => {
@@ -40,36 +65,47 @@ const NurseSidebar = ({ navigation, nurse, activeRoute }) => {
         setNurseId(nurseId);
         setNurseDetails(response.data);
       } catch (error) {
+        if(error.response && error.response.status===500)
+              {
+              Alert.alert(
+                'Error',
+                'Session Expired !!Please Log in again',
+                [
+                  { text: 'OK', onPress: () => {
+                    AsyncStorage.removeItem('token');
+                    navigation.navigate("HomePage")} }
+                ],
+                { cancelable: false }
+              );
+            }else{
         console.error('Error fetching nurse details:', error);
-      }
+      }}
     };
 
     fetchNurseDetails();
   }, [nurseId]);
 
-  //const { name, email } = nurse;
   const navigateToScreen = (route) => () => {
-    //setActiveOption(route);
-    navigation.navigate(route); // Navigate to the specified route
-    // if (route === 'Home') {
-    //   navigation.navigate(route);
-    // } else {
-    //   navigation.navigate(route);
-    // }
-    // if (route === 'Patient_Details') {
-    //   navigation.navigate(route);
-    // } else {
-    //   navigation.navigate(route);
-    // }
-  };
+    if (route === 'NurseHome') {
+      navigation.navigate(route);
+    } else if (route === 'NursePatient_Details') {
+      navigation.navigate(route);
+    }else if(route==='HomePage'){
+       logoutUser();
+    }
+    else {
+      navigation.navigate(route);
+    }
+ };
 
   return (
     <View style={styles.container}>
       <View style={styles.profileContainer}>
-        <Image source={Nurse_Pic} style={styles.profileImage} />
       
         {nurseDetails ? (
               <>
+
+                <Image source={{ uri: nurseDetails.photo }} style={styles.profileImage} />
                 <Text style={styles.profileText}>{nurseDetails.name}</Text>
                 <Text style={styles.profileText}>Contact: {nurseDetails.contact}</Text>
                 <Text style={styles.profileText}>Email: {nurseDetails.email}</Text>
@@ -93,6 +129,7 @@ const NurseSidebar = ({ navigation, nurse, activeRoute }) => {
       </TouchableOpacity>
       <View style={styles.line}></View>
     </View>
+
   );
 };
 
@@ -148,6 +185,13 @@ const styles = StyleSheet.create({
   sidebarClosed: {
     left: -200,
   },
+  noImagesText: {
+    fontSize: 30,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 20,
+    color: 'red', 
+  }
 });
 
 export default NurseSidebar;

@@ -8,9 +8,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import NurseHeader from './NurseHeader';
 import NurseSidebar from './Sidebar';
 import { API_BASE_URL } from '../config';
-import LoadingScreen from './Loading';
+import LoadingScreen from '../Loading';
 import BG_Vitals from "../Nurse_Comp_Images/BG_Vitals.png";
-import View_Vitals from "../Nurse_Comp_Images/View_Vitals.png";
+import View_Vitals from "../Nurse_Comp_Images/View_Vitals.jpg";
+import { useConsent } from '../Context/ConsentContext';
 
 export default function ViewVitals({ navigation, route }) {
     const { email } = useEmail();
@@ -18,22 +19,41 @@ export default function ViewVitals({ navigation, route }) {
     const [isLoading, setIsLoading] = useState(true);
     const [vitals, setVitals] = useState([]);
     const patientId = route.params.patientId;
+    const {consentToken} = useConsent();
+    const [loading,setLoading] = useState(false);
 
     useEffect(() => {
         const fetchVitals = async () => {
+            
             try {
+                setLoading(true);
                 const token = await AsyncStorage.getItem('token');
-                const response = await axios.get(`${API_BASE_URL}/nurse/viewVitals/${patientId}`, {
+                const response = await axios.get(`${API_BASE_URL}/nurse/viewVitals/${patientId}/${consentToken}`, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
                 });
                 setVitals([response.data]);
                 setIsLoading(false); 
+                setLoading(false);
             } catch (error) {
+                setLoading(false);
+                if(error.response && error.response.status===500)
+                {
+                Alert.alert(
+                  'Error',
+                  'Session Expired !!Please Log in again',
+                  [
+                    { text: 'OK', onPress: () => {
+                      AsyncStorage.removeItem('token');
+                      navigation.navigate("HomePage")} }
+                  ],
+                  { cancelable: false }
+                );
+              }else{
                 console.error('Error fetching vitals:', error);
-                setIsLoading(false); 
-            }
+                setIsLoading(false);
+              }}
         };
 
         
@@ -69,12 +89,29 @@ export default function ViewVitals({ navigation, route }) {
                   },
             });
             setIsLoading(true);
-            navigation.navigate('viewVitals',{patientId})
+            navigation.navigate('viewVitals',{patientId}) 
         } catch (error) {
-            console.error('Error deleting vital:', error);
-        }
+            if(error.response && error.response.status===500)
+            {
+            Alert.alert(
+              'Error',
+              'Session Expired !!Please Log in again',
+              [
+                { text: 'OK', onPress: () => {
+                  AsyncStorage.removeItem('token');
+                  navigation.navigate("HomePage")} }
+              ],
+              { cancelable: false }
+            );
+          }else{
+            console.error('Error deleting vitals:', error);
+          }}
     };
 
+    if(loading)
+    {
+        return <LoadingScreen/>
+    }
     
     const renderItem = ({ item }) => (
         <View style={styles.vitalContainer}>
@@ -113,10 +150,11 @@ export default function ViewVitals({ navigation, route }) {
                 <Text style={styles.buttonText}>Edit</Text>
                 <MaterialIcons name="edit" size={24} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={() => handleDelete(item.vitalid)}>
+            {/* <TouchableOpacity style={styles.button} onPress={() => handleDelete(item.vitalid)}>
                 <Text style={styles.buttonText}>Delete</Text>
                 <MaterialIcons name="delete" size={24} color="white" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
+
         </View>
     </View>
     );

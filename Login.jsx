@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert,route,
   ImageBackground, } from 'react-native';
 import axios from 'axios';
@@ -6,6 +6,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useEmail} from './Context/EmailContext';
 import { API_BASE_URL } from './config';
 import LogoImage from "./Nurse_Comp_Images/Logo.jpg";
+import { NativeModules, Platform } from 'react-native';
+import Aes from 'react-native-aes-crypto'
+import CryptoJs from 'react-native-crypto-js';
+
 import LoginPage from "./Nurse_Comp_Images/LoginPage.jpg";
 
 const Login= ({ navigation,route }) => {
@@ -13,16 +17,54 @@ const Login= ({ navigation,route }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const roles=route.params.role;
-  //console.log(roles);
+  const [isOTPVerified, setIsOtpVerified] = useState(true);
+  
+
+  const role=route.params.role;
+  const key="6290456838123456";
+  const iv="1999455819994558";
+  let isLogin=true;
+
+  useEffect(() => {
+    if (route.params?.isOTPVerified) {
+      setIsOtpVerified(route.params.isOTPVerified);
+    }
+  }, [route.params]);
+
+
+  const handleVerifyOTP = () => {
+    navigation.navigate('OTPVerify', {
+      email,
+      role,
+      isOTPVerified,
+      isLogin
+    });
+  };
+
+  const handleForgotPassword = () => {
+    navigation.navigate('ChangePasswordPage', { role}); 
+  };
+
+
+  const encryptData = async (text) => {
+    const keyWordArray=CryptoJs.enc.Utf8.parse(key);
+    const ivWordArray = CryptoJs.enc.Utf8.parse(iv);
+    const data=CryptoJs.AES.encrypt(text,keyWordArray,{
+      iv:ivWordArray,
+      mode:CryptoJs.mode.CBC,
+      padding:CryptoJs.pad.Pkcs7
+    })
+
+    return data.toString();
+}
+  
   
   const handleLogin = async() => {
-    //console.log(role);
-    if(roles=== 'Nurse'){
+    if(role=== 'Nurse'){
     try {
         const response = await axios.post(`${API_BASE_URL}/nurse/login`, {
-          email,
-          password,
+          email: await encryptData(email),
+          password: await encryptData(password),
         });
         console.log(response.data.status);
         if (response.data.status) {
@@ -30,7 +72,18 @@ const Login= ({ navigation,route }) => {
           const token = response.data.token;
           await AsyncStorage.setItem('token', token);
           navigation.navigate('NurseHome');
-        } else {
+        } else if(response.data.status===false){
+          Alert.alert(
+            'Error',
+            'User Already logged In',
+            [
+              { text: 'OK', onPress: () => console.log('OK Pressed') }
+            ],
+            { cancelable: false }
+          );
+        }
+        
+        else if(response.data.status===null) {
           Alert.alert(
             'Error',
             'Invalid email or password',
@@ -51,11 +104,11 @@ const Login= ({ navigation,route }) => {
       
       }
     }
-    if(roles=='Doctor'){
+    if(role=='Doctor'){
       try {
         const response = await axios.post(`${API_BASE_URL}/doctor/login`, {
-          email,
-          password,
+          email: await encryptData(email),
+          password: await encryptData(password),
         });
         console.log(response.data.status);
         if (response.data.status) {
@@ -63,7 +116,17 @@ const Login= ({ navigation,route }) => {
           const token = response.data.token;
           await AsyncStorage.setItem('token', token);
           navigation.navigate('DoctorHome', { shouldFetchData: true });
-        } else {
+        }else if(response.data.status===false){
+          Alert.alert(
+            'Error',
+            'User Already Logged In',
+            [
+              { text: 'OK', onPress: () => console.log('OK Pressed') }
+            ],
+            { cancelable: false }
+          );
+        }
+        else if(response.data.status===null) {
           Alert.alert(
             'Error',
             'Invalid email or password',
@@ -84,18 +147,30 @@ const Login= ({ navigation,route }) => {
       
       }
     }
-    if(roles=='Admin'){
+    if(role==='Admin'){
       try {
         const response = await axios.post(`${API_BASE_URL}/admin/login`, {
-          email,
-          password,
+          email:await encryptData(email),
+          password:await encryptData(password),
         });
         console.log(response.data.status);
         if (response.data.status) {
           const token = response.data.token;
+          updateEmail(email);
+          console.log(token);
           await AsyncStorage.setItem('token', token);
           navigation.navigate('AdminHome');
-        } else {
+        } else if(response.data.status===false){
+          Alert.alert(
+            'Error',
+            'User Already Logged In',
+            [
+              { text: 'OK', onPress: () => console.log('OK Pressed') }
+            ],
+            { cancelable: false }
+          );
+        }
+        else if(response.data.status===null){
           Alert.alert(
             'Error',
             'Invalid email or password',
@@ -104,6 +179,7 @@ const Login= ({ navigation,route }) => {
             ],
             { cancelable: false }
           );
+
         }
       } catch (error) {
         if (error.response) {
@@ -116,12 +192,12 @@ const Login= ({ navigation,route }) => {
       
       }
     }
-    if(roles==='Receptionist')
+    if(role==='Receptionist')
     {
       try {
         const response = await axios.post(`${API_BASE_URL}/receptionist/login`, {
-          email,
-          password,
+          email:await encryptData(email),
+          password: await encryptData(password),
         });
         console.log(response.data.status);
         if (response.data.status) {
@@ -129,8 +205,19 @@ const Login= ({ navigation,route }) => {
           updateEmail(email); 
           const token = response.data.token;
           await AsyncStorage.setItem('token', token);
-          navigation.navigate('Appointment');
-        } else {
+          navigation.navigate('ReceptionistHome');
+        } else if(response.data.status===false){
+          Alert.alert(
+            'Error',
+            'User Already Logged In',
+            [
+              { text: 'OK', onPress: () => console.log('OK Pressed') }
+            ],
+            { cancelable: false }
+          );
+        }
+        
+        else if(response.data.status===null){
           Alert.alert(
           'Error',
           'Invalid email or password',
@@ -141,62 +228,28 @@ const Login= ({ navigation,route }) => {
         );
         }
           
-          // updateReceptionistId(email); 
-          // navigation.navigate('Appointment');
+          
 
       } catch (error) {
-          /*console.error('Error logging in:', error);
-          setError('Error logging in. Please try again later.');*/
+         
           if (error.response) {
-            // Server responded with a non-2xx status code
+            
             console.error('Server Error:', error.response.data);
         } else if (error.request) {
-            // No response received from the server
+            
             console.error('No Response from Server:', error.request);
         } else {
-            // Request failed to be sent
             console.error('Request Error:', error.message);
         }
         
      }
     }
-    if(roles
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      ==='Pharmacy')
+    if(role==='Pharmacy')
     {
       try {
         const response = await axios.post(`${API_BASE_URL}/pharmacy/login`, {
-          email,
-          password,
+          email: await encryptData(email),
+          password: await encryptData(password),
         });
         console.log(response.data.status);
         if (response.data.status) {
@@ -204,7 +257,17 @@ const Login= ({ navigation,route }) => {
           const token = response.data.token;
           await AsyncStorage.setItem('pharmacytoken', token);
           navigation.navigate('PharmacyHome'); 
-        } else {
+        } else if(response.data.status==false){
+          Alert.alert(
+            'Error',
+            'User Already Logged In',
+            [
+              { text: 'OK', onPress: () => console.log('OK Pressed') }
+            ],
+            { cancelable: false }
+          );
+        }
+        else if(response.data.status===null) {
           Alert.alert(
             'Error',
             'Invalid email or password',
@@ -255,6 +318,17 @@ return (
               keyboardType="email-address"
               autoCapitalize="none"
             />
+
+            {role !== 'Admin' && (
+              <TouchableOpacity
+                onPress={handleVerifyOTP}
+                disabled={!email.trim()} 
+                style={email.trim() ? styles.verifyOtpLink : [styles.verifyOtpLink, styles.disabledLink]}
+              >
+                <Text style={styles.verifyOtpText}>Verify OTP</Text>
+              </TouchableOpacity>
+            )}
+
              </View>
             <View style={styles.inputContainer}>
               
@@ -267,10 +341,21 @@ return (
               onChangeText={setPassword}
               secureTextEntry
             /></View>
+           {role !== 'Admin' && (
+              <TouchableOpacity style={styles.forgotPasswordLink} onPress={handleForgotPassword}>
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            )}
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <TouchableOpacity style={styles.button} onPress={handleLogin}>
-              <Text style={styles.buttonText}>Login</Text>
-            </TouchableOpacity>
+            {role !== 'Admin' ? (
+              <TouchableOpacity style={[styles.button, isOTPVerified ? {} : styles.disabledButton]} onPress={handleLogin} disabled={!isOTPVerified}>
+                <Text style={styles.buttonText}>Login</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.button} onPress={handleLogin}>
+                <Text style={styles.buttonText}>Login</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.backButton]}
               onPress={() => navigation.goBack()}
@@ -298,6 +383,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 50,
   },
   backgroundImage: {
     flex: 1,
@@ -364,7 +450,7 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: "#339999",
-    width: 200,
+    width: 150,
     height: 40,
     borderRadius: 5,
     justifyContent: "center",
@@ -380,7 +466,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   backButton: {
-    marginTop: 30,
+    marginTop: 15,
     alignItems: 'center',
     justifyContent: 'center',
     width: 100,
@@ -392,6 +478,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'white',
   },
+  forgotPasswordLink: {
+    alignSelf: 'flex-end', // Aligns the link to the right side
+    marginTop: 5, // Adds some space between the password input and the link
+  },
+  forgotPasswordText: {
+    color: '#1e90ff', // Adjust the color of the text for the link
+  },
+  verifyOtpText: {
+    color: '#1e90ff',
+    alignSelf: 'flex-end',
+    marginBottom: -20,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  disabledLink: {
+    opacity: 0.5,  // Makes the link appear faded when disabled
+  },
+
 });
 
 export default Login;

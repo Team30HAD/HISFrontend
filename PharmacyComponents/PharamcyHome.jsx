@@ -6,6 +6,7 @@ import PharmacyHeader from './PharmacyHeader';
 import PharmacySidebar from './PharmacySidebar';
 import { API_BASE_URL } from '../config';
 import { useEmail } from '../Context/EmailContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function PharmacyDetails({ navigation }) {
   const { email } = useEmail();
@@ -19,41 +20,53 @@ export default function PharmacyDetails({ navigation }) {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
+  const handleSessionExpiration = () => {
+    Alert.alert(
+      'Error',
+      'Session Expired !! Please Log in again',
+      [{ text: 'OK', onPress: () => {
+        AsyncStorage.removeItem('pharmacytoken');
+        navigation.navigate("HomePage");
+      }}],
+      { cancelable: false }
+    );
+  };
+
+  const fetchData = async () => {
+    try {
+      const token = await AsyncStorage.getItem('pharmacytoken');
+      const detailsResponse = await axios.get(`${API_BASE_URL}/pharmacy/home/${email}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const totalResponse = await axios.get(`${API_BASE_URL}/pharmacy/total-served`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setPharmacyDetails(detailsResponse.data);
+      setTotalPatientsServed(totalResponse.data.totalPatientsServed);
+      setTotalMedicinesServed(totalResponse.data.totalMedicinesServed);
+    } catch (error) {
+      if (error.response && error.response.status === 500) {
+        handleSessionExpiration();
+      } else {
+        console.error('Error fetching data:', error);
+      }
+    }
+  };
+
+  // Fetch data initially and set up a timer for refreshing data
   useEffect(() => {
-    const fetchPharmacyDetails = async () => {
-      try {
-        const token = await AsyncStorage.getItem('pharmacytoken');
-        const response = await axios.get(`${API_BASE_URL}/pharmacy/home/${email}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        setPharmacyDetails(response.data);
-      } catch (error) {
-        console.error('Error fetching pharmacy details:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    fetchData();
+    const intervalId = setInterval(fetchData, 30000); // Refresh every 30 seconds
+    return () => clearInterval(intervalId); // Cleanup on unmount
+  }, []);
 
-    const fetchTotalServedData = async () => {
-      try {
-        const token = await AsyncStorage.getItem('pharmacytoken');
-        const response = await axios.get(`${API_BASE_URL}/pharmacy/total-served`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        setTotalPatientsServed(response.data.totalPatientsServed);
-        setTotalMedicinesServed(response.data.totalMedicinesServed);
-      } catch (error) {
-        console.error('Error fetching total served data:', error);
-      }
-    };
-
-    fetchPharmacyDetails();
-    fetchTotalServedData();
-  }, [email]);
+  // Ensure data is refreshed when the component is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchData();
+      return () => {};
+    }, [])
+  );
 
   return (
     <View style={styles.container}>
@@ -64,7 +77,7 @@ export default function PharmacyDetails({ navigation }) {
           <ImageBackground source={{ uri: "https://i.pinimg.com/736x/c6/f8/05/c6f8054235ac9523148c25010952d3af.jpg" }} style={styles.detailsContainer}>
             {pharmacyDetails ? (
               <>
-                <Text style={styles.detailHeading}>Your Profile Overview...</Text>
+                <Text style={styles.detailHeading}>Pharmacy Details...</Text>
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Name:</Text>
                   <Text style={styles.detailValue}>{pharmacyDetails.name}</Text>
@@ -82,7 +95,7 @@ export default function PharmacyDetails({ navigation }) {
                   <Text style={styles.detailValue}>{pharmacyDetails.email}</Text>
                 </View>
                 <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>License No.:</Text>
+                  <Text style={styles.detailLabel}>License No:</Text>
                   <Text style={styles.detailValue}>{pharmacyDetails.licenseNumber}</Text>
                 </View>
               </>

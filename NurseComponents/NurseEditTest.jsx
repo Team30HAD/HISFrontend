@@ -46,8 +46,21 @@ export default function NurseEditTest({ navigation, route }) {
                 });
                 setEditableResult(testDetails.result);
             } catch (error) {
+                if(error.response && error.response.status===500)
+                {
+                Alert.alert(
+                  'Error',
+                  'Session Expired !!Please Log in again',
+                  [
+                    { text: 'OK', onPress: () => {
+                      AsyncStorage.removeItem('token');
+                      navigation.navigate("HomePage")} }
+                  ],
+                  { cancelable: false }
+                );
+              }else{
                 console.error('Error fetching test details:', error);
-            }
+            }}
         };
 
         fetchTestDetails();
@@ -57,6 +70,10 @@ export default function NurseEditTest({ navigation, route }) {
         setEditableResult(value);
         setTest({ ...test, result: value });
     };
+
+    const renderErrorMessage = (errorMessage) => (
+        <Text style={[styles.errorMessage, { color: 'red' }]}>{errorMessage}</Text>
+    );
     
 
     const handleSubmit = async () => {
@@ -80,8 +97,21 @@ export default function NurseEditTest({ navigation, route }) {
         setTest([]);
         setEditableResult('');
         } catch (error) {
-            console.error('Error editing test:', error);
-        }
+            if(error.response && error.response.status===500)
+            {
+            Alert.alert(
+              'Error',
+              'Session Expired !!Please Log in again',
+              [
+                { text: 'OK', onPress: () => {
+                  AsyncStorage.removeItem('token');
+                  navigation.navigate("HomePage")} }
+              ],
+              { cancelable: false }
+            );
+          }else{
+            console.error('Error editing test details:', error);
+        }}
     };
 
     return (
@@ -117,6 +147,7 @@ export default function NurseEditTest({ navigation, route }) {
                                 placeholder="Enter Result"
                             />
                         </View>
+                        {test.result !== '' && !/^[a-zA-Z0-9\s]+$/.test(test.result) && renderErrorMessage('Test Result  must contain only alphabets,numbers and spaces.')}
                         <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
                             <Text style={styles.submitButtonText}>Submit</Text>
                         </TouchableOpacity>

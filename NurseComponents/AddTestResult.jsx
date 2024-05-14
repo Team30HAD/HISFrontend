@@ -9,6 +9,7 @@ import NurseSidebar from './Sidebar';
 import { API_BASE_URL } from '../config';
 import { FontAwesome } from '@expo/vector-icons';
 import BG_Tests from "../Nurse_Comp_Images/BG_Tests.png";
+import { useConsent } from '../Context/ConsentContext';
 
 export default function AddTestResult({ navigation, route }) {
     const { email } = useEmail();
@@ -16,7 +17,9 @@ export default function AddTestResult({ navigation, route }) {
     const [tests, setTests] = useState([]);
     const [selectedTest, setSelectedTest] = useState('');
     const [id, setId] = useState('');
+    const [testName,setTestName]= useState("");
     const [prescribedDate, setPrescribedDate] = useState('');
+    const {consentToken} = useConsent();
     const [testResults, setTestResults] = useState({
         testName: '',
         prescribedOn: '',
@@ -35,11 +38,15 @@ export default function AddTestResult({ navigation, route }) {
     useEffect(() => {
         fetchTests(patientId);
     }, [patientId]);
+
+    const renderErrorMessage = (errorMessage) => (
+        <Text style={[styles.errorMessage, { color: 'red' }]}>{errorMessage}</Text>
+    );
     
     const fetchTests = async (patientId) => {
         try {
             const token = await AsyncStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/nurse/viewTestName/${patientId}`, {
+            const response = await fetch(`${API_BASE_URL}/nurse/viewTestName/${patientId}/${consentToken}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -51,8 +58,21 @@ export default function AddTestResult({ navigation, route }) {
             setTests(testsData);
             console.log(testsData);
         } catch (error) {
+            if(error.response && error.response.status===500)
+            {
+            Alert.alert(
+              'Error',
+              'Session Expired !!Please Log in again',
+              [
+                { text: 'OK', onPress: () => {
+                  AsyncStorage.removeItem('token');
+                  navigation.navigate("HomePage")} }
+              ],
+              { cancelable: false }
+            );
+          }else{
             console.error('Error fetching tests:', error);
-        }
+        }}
     };
     
 
@@ -62,13 +82,34 @@ export default function AddTestResult({ navigation, route }) {
 
     const handleSubmit = async () => {
         try {
-            const resultRegex = /^[a-zA-Z0-9\s]*$/; 
+           // const resultRegex = /^[a-zA-Z0-9\s]*$/; 
+           const resultRegex = /^[a-zA-Z0-9\s.]*$/;
+
         
             if (!resultRegex.test(testResults.result)) {
                 Alert.alert('Invalid Result', 'Please enter a valid result.');
                 return;
             }
             const token = await AsyncStorage.getItem('token');
+            const doctorResponse = await axios.get(`${API_BASE_URL}/nurse/getDoctorEmail/${patientId}/${id}`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+            const doctorEmail = doctorResponse.data;
+            const res=testName;
+            const notificationBody = {
+                body: `Test result added successfully for the patientId :${patientId}  for ${res}`,
+                doctorEmail: doctorEmail, 
+                patientId: patientId,
+              };
+              await axios.post(`${API_BASE_URL}/nurse/notifyDoctor`, notificationBody, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+          
+          
             const response = await axios.post(`${API_BASE_URL}/nurse/addTestResult/${id}`, 
                 testResults,{
                 headers: {
@@ -85,8 +126,21 @@ export default function AddTestResult({ navigation, route }) {
             setPrescribedDate('');
             setSelectedTest('');
         } catch (error) {
+            if(error.response && error.response.status===500)
+            {
+            Alert.alert(
+              'Error',
+              'Session Expired !!Please Log in again',
+              [
+                { text: 'OK', onPress: () => {
+                  AsyncStorage.removeItem('token');
+                  navigation.navigate("HomePage")} }
+              ],
+              { cancelable: false }
+            );
+          }else{
             console.error('Error adding Test Result:', error);
-        }
+        }}
     };
 
     return (
@@ -114,6 +168,7 @@ export default function AddTestResult({ navigation, route }) {
                                     setSelectedTest(itemValue);
                                     const selectedTestDetails = tests.find(test => test.testName === itemValue);
                                     console.log(selectedTestDetails);
+                                    setTestName(selectedTestDetails.testName);
                                     if (selectedTestDetails) {
                                         setId(selectedTestDetails.id); // Add conditional check here
                                         setPrescribedDate(selectedTestDetails.prescribedOn);
@@ -152,6 +207,7 @@ export default function AddTestResult({ navigation, route }) {
                 numberOfLines={4}
                             />
                         </View>
+                        {testResults.result !== '' && !/^[a-zA-Z0-9\s.]*$/.test(testResults.result) && renderErrorMessage('Test Result  must contain only alphabets,numbers and spaces.')}
                         <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
                             <Text style={styles.submitButtonText}>Submit</Text>
                         </TouchableOpacity>

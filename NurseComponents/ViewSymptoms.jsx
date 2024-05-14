@@ -7,9 +7,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import NurseHeader from './NurseHeader';
 import NurseSidebar from './Sidebar';
 import { API_BASE_URL } from '../config';
-import LoadingScreen from './Loading';
+import LoadingScreen from '../Loading';
 import BG_Symptoms from "../Nurse_Comp_Images/BG_Symptoms.jpg";
 import View_Symptom from "../Nurse_Comp_Images/View_Symptom.gif";
+import { useConsent } from '../Context/ConsentContext';
 
 
 export default function ViewSymptoms({ navigation, route }) {
@@ -18,22 +19,39 @@ export default function ViewSymptoms({ navigation, route }) {
     const [isLoading, setIsLoading] = useState(true);
     const [symptoms, setSymptoms] = useState([]);
     const patientId = route.params.patientId;
-
+    const {consentToken} = useConsent();
+    const [loading,setLoading] = useState(false);
     useEffect(() => {
         const fetchSymptoms = async () => {
             try {
+                setLoading(true);
                 const token = await AsyncStorage.getItem('token');
-                const response = await axios.get(`${API_BASE_URL}/nurse/viewSymptoms/${patientId}`,{
+                const response = await axios.get(`${API_BASE_URL}/nurse/viewSymptoms/${patientId}/${consentToken}`,{
                     headers: {
                         Authorization: `Bearer ${token}`,
                       },
                 });
                 setSymptoms([response.data]);
-                setIsLoading(false); 
+                setIsLoading(false);
+                setLoading(false); 
             } catch (error) {
-                console.error('Error fetching symptoms:', error);
-                setIsLoading(false); 
-            }
+                setLoading(false);
+                if(error.response && error.response.status===500)
+                {
+                Alert.alert(
+                  'Error',
+                  'Session Expired !!Please Log in again',
+                  [
+                    { text: 'OK', onPress: () => {
+                      AsyncStorage.removeItem('token');
+                      navigation.navigate("HomePage")} }
+                  ],
+                  { cancelable: false }
+                );
+              }else{
+                console.error('Error fetching patient symptoms:', error);
+                setIsLoading(false);
+              }}
         };
         if (isLoading) {
             fetchSymptoms();
@@ -70,9 +88,27 @@ export default function ViewSymptoms({ navigation, route }) {
             setIsLoading(true);
             navigation.navigate('viewSymptoms',{patientId})
         } catch (error) {
-            console.error('Error deleting Symptom:', error);
-        }
+            if(error.response && error.response.status===500)
+            {
+            Alert.alert(
+              'Error',
+              'Session Expired !!Please Log in again',
+              [
+                { text: 'OK', onPress: () => {
+                  AsyncStorage.removeItem('token');
+                  navigation.navigate("HomePage")} }
+              ],
+              { cancelable: false }
+            );
+          }else{
+            console.error('Error deleting symptoms:', error);
+          }}
     };
+
+    if(loading)
+    {
+        return <LoadingScreen/>
+    }
 
     return (
         <View style={styles.container}>
@@ -105,10 +141,10 @@ export default function ViewSymptoms({ navigation, route }) {
                                         <Text style={styles.buttonText}>Edit</Text>
                                         <MaterialIcons name="edit" size={24} color="white" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity style={styles.button} onPress={() => handleDelete(item.symptomid)}>
+                                    {/* <TouchableOpacity style={styles.button} onPress={() => handleDelete(item.symptomid)}>
                                         <Text style={styles.buttonText}>Delete</Text>
                                         <MaterialIcons name="delete" size={24} color="white" />
-                                    </TouchableOpacity>
+                                    </TouchableOpacity> */}
                                 </View>
                                 </View>))}
                     </View>

@@ -1,14 +1,5 @@
-import React, { useState, useEffect, useContext } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
-  Alert,
-  //Picker
-} from "react-native";
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text,TextInput, View, ScrollView, TouchableOpacity, Alert, ImageBackground,Image, FlatList  } from 'react-native';
 // import CheckBox from "@react-native-community/checkbox";
 import CheckBox from "expo-checkbox";
 import axios from "axios";
@@ -16,24 +7,25 @@ import ReceptionistHeader from "./ReceptionistHeader";
 import ReceptionistSidebar from "./Sidebar";
 import SelectDropdown from "react-native-select-dropdown";
 import { Picker } from "@react-native-picker/picker";
-import  AsyncStorage  from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_BASE_URL } from "../config";
 import { useEmail } from "../Context/EmailContext";
+import BG_Appointment from "../Receptionist_Comp_Images/BG_Appointment.jpg";
 
 export default function EditPatientDetails({ navigation }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { email } = useEmail();
   const [appointmentInfo, setAppointmentInfo] = useState({
     patientId: "",
   });
-  const [fetchedData, setFetchedData] = useState()
+  const [fetchedData, setFetchedData] = useState();
   const [patientInfo, setPatientInfo] = useState({
     name: "",
     age: "",
     gender: "",
     contact: "",
     email: "",
-    department:"OP"
+    department: "OP",
   });
 
   const clearFields = () => {
@@ -43,7 +35,7 @@ export default function EditPatientDetails({ navigation }) {
       gender: "",
       contact: "",
       email: "",
-      department:"OP"
+      department: "OP",
     });
   };
   // Regular expressions for validation
@@ -51,7 +43,6 @@ export default function EditPatientDetails({ navigation }) {
   const ageRegex = /^\d+$/;
   const contactRegex = /^\d{10}$/;
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
 
   const validateFields = () => {
     if (!appointmentInfo.patientId.trim()) {
@@ -84,32 +75,63 @@ export default function EditPatientDetails({ navigation }) {
       return false;
     }
     // Validate email if entered
-    if (patientInfo.email.trim() && !emailRegex.test(patientInfo.email.trim())) {
+    if (
+      patientInfo.email.trim() &&
+      !emailRegex.test(patientInfo.email.trim())
+    ) {
       Alert.alert("Invalid Email", "Please enter a valid email.");
       return false;
     }
     return true;
   };
-  
 
+  const fetchConsentToken = async (patientId) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        throw new Error("No authentication token available");
+      }
+      const consentresponse = await fetch(
+        `${API_BASE_URL}/receptionist/getConsentToken/${patientId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!consentresponse.ok) {
+        throw new Error(
+          `Failed to fetch the consent token. Status: ${consentresponse.status}`
+        );
+      }
+      return await consentresponse.text();
+    } catch (error) {
+      console.error("Error fetching consent details:", error);
+      return null;
+    }
+  };
 
   const fetchPatientDetails = async () => {
     try {
-      const token = await AsyncStorage.getItem('token'); // Retrieve the token
-      
+      const consentToken = await fetchConsentToken(appointmentInfo.patientId);
+      if (!consentToken) {
+        console.error("No consent token retrieved");
+        return;
+      }
+      const token = await AsyncStorage.getItem("token"); // Retrieve the token
+
       const response = await axios.get(
-        `${API_BASE_URL}/receptionist/getPatientDetails/${appointmentInfo.patientId}`,
+        `${API_BASE_URL}/receptionist/getPatientDetails/${appointmentInfo.patientId}/${consentToken}`,
         {
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
-  
+
       if (response.data.patientName === undefined) {
         clearFields();
       } else {
-        console.log(response.data);
         setFetchedData(response.data);
         const data = {
           name: response.data?.patientName,
@@ -117,15 +139,31 @@ export default function EditPatientDetails({ navigation }) {
           gender: response.data?.sex,
           contact: response.data?.contact,
           email: response.data?.email,
-          department:"OP"
+          department: "OP",
         };
         setPatientInfo(data);
       }
     } catch (error) {
-      console.log(error);
+      if (error.response && error.response.status === 500) {
+        Alert.alert(
+          "Error",
+          "Session Expired !!Please Log in again",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                AsyncStorage.removeItem("token");
+                navigation.navigate("HomePage");
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      } else {
+        console.log(error);
+      }
     }
   };
-  
 
   const handleChangePatient = (key, value) => {
     setPatientInfo({ ...patientInfo, [key]: value });
@@ -135,15 +173,14 @@ export default function EditPatientDetails({ navigation }) {
     setAppointmentInfo({ ...appointmentInfo, [key]: value });
   };
 
-
   const handleSearchPatient = async () => {
     fetchPatientDetails();
   };
-  
+
   const handleDeletePatient = async () => {
     try {
-      const token = await AsyncStorage.getItem('token'); // Retrieve the token
-      
+      const token = await AsyncStorage.getItem("token"); // Retrieve the token
+
       await axios.put(
         `${API_BASE_URL}/receptionist/deletePatientPII/${appointmentInfo.patientId}`,
         null,
@@ -153,24 +190,77 @@ export default function EditPatientDetails({ navigation }) {
           },
         }
       );
-  
-      console.log("Patient details deleted successfully");
       Alert.alert("Patient details deleted successfully");
       setAppointmentInfo({
         patientId: "",
       });
       clearFields();
     } catch (error) {
-      console.error("Error deleting patient details:", error);
+      if (error.response && error.response.status === 500) {
+        Alert.alert(
+          "Error",
+          "Session Expired !!Please Log in again",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                AsyncStorage.removeItem("token");
+                navigation.navigate("HomePage");
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      } else {
+        console.error("Error deleting patient details:", error);
+      }
     }
   };
-  
 
-  
+  const handleDeleteMedicalData = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token"); // Retrieve the token
+
+      await axios.delete(
+        `${API_BASE_URL}/receptionist/deletePatientRecords/${appointmentInfo.patientId}`,
+        null,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      Alert.alert("Patient details deleted successfully");
+      setAppointmentInfo({
+        patientId: "",
+      });
+      clearFields();
+    } catch (error) {
+      if (error.response && error.response.status === 500) {
+        Alert.alert(
+          "Error",
+          "Session Expired !!Please Log in again",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                AsyncStorage.removeItem("token");
+                navigation.navigate("HomePage");
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      } else {
+        console.error("Error deleting patient details:", error);
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     try {
-      const token = await AsyncStorage.getItem('token'); // Retrieve the token
-      
+      const token = await AsyncStorage.getItem("token"); // Retrieve the token
+
       const bodyData = {
         //...fetchedData,
         patientName: patientInfo.name,
@@ -178,14 +268,13 @@ export default function EditPatientDetails({ navigation }) {
         sex: patientInfo.gender,
         contact: patientInfo.contact,
         email: patientInfo.email,
-        department:patientInfo.department
+        department: patientInfo.department,
       };
-      console.log(bodyData);
-  
+
       if (!validateFields()) {
         return;
       }
-  
+
       await axios.put(
         `${API_BASE_URL}/receptionist/updatePatient/${appointmentInfo.patientId}`,
         bodyData,
@@ -195,32 +284,48 @@ export default function EditPatientDetails({ navigation }) {
           },
         }
       );
-  
-      console.log("Patient details updated successfully");
       Alert.alert("Patient details updated successfully");
       setAppointmentInfo({
         patientId: "",
       });
       clearFields();
     } catch (error) {
-      console.error("Error updating patient details:", error);
+      if (error.response && error.response.status === 500) {
+        Alert.alert(
+          "Error",
+          "Session Expired !!Please Log in again",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                AsyncStorage.removeItem("token");
+                navigation.navigate("HomePage");
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      } else {
+        console.error("Error updating patient details:", error);
+      }
     }
   };
-  
 
   return (
     <View style={styles.container}>
       {/* <ReceptionistHeader /> */}
       {/* <ReceptionistSidebar navigation={navigation} /> */}
       <ReceptionistHeader onPress={() => setIsSidebarOpen(!isSidebarOpen)} />
+      <ImageBackground source={BG_Appointment} style={styles.content}>
 
-      <View style={styles.content}>
+      
         {isSidebarOpen && (
           <ReceptionistSidebar
             navigation={navigation}
             //receptionistId={receptionistId}
             email={email}
             isSidebarOpen={isSidebarOpen}
+            activeRoute="EditPatientDetails"
           />
         )}
 
@@ -237,9 +342,9 @@ export default function EditPatientDetails({ navigation }) {
               value={appointmentInfo.patientId}
               placeholder="Enter patient's ID"
             />
-            <TouchableOpacity onPress={handleSearchPatient}>
-              <Text>Search</Text>
-            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSearchPatient} style={styles.SearchButton}>
+                <Text style={styles.submitButtonText}>Search</Text>
+              </TouchableOpacity>
           </View>
 
           <>
@@ -278,10 +383,11 @@ export default function EditPatientDetails({ navigation }) {
           </>
 
           <>
-            <View style={styles.inputContainer}>
+           <View style={styles.inputContainer}>
               <Text style={styles.label}>Patient Gender:</Text>
+              <View style={styles.pickerContainer}>
               <Picker
-                style={styles.input}
+                style={styles.picker}
                 selectedValue={patientInfo.gender}
                 onValueChange={(itemValue, itemIndex) =>
                   handleChangePatient("gender", itemValue)
@@ -290,6 +396,7 @@ export default function EditPatientDetails({ navigation }) {
                 <Picker.Item label="Male" value="Male" />
                 <Picker.Item label="Female" value="Female" />
               </Picker>
+            </View>
             </View>
           </>
 
@@ -305,24 +412,29 @@ export default function EditPatientDetails({ navigation }) {
             </View>
           </>
 
-          <TouchableOpacity
-            style={styles.submitButton}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.submitButtonText}>
-              Save Changes
-            </Text>
+          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+            <Text style={styles.submitButtonText}>Save Changes</Text>
           </TouchableOpacity>
+
+          <View style={styles.deleteContainer}>
           <TouchableOpacity
             style={styles.deleteButton}
             onPress={handleDeletePatient}
           >
-            <Text style={styles.deleteButtonText}>
-              Delete Patient
-            </Text>
+            <Text style={styles.deleteButtonText}>Delete Patient</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={handleDeleteMedicalData}
+          >
+            <Text style={styles.deleteButtonText}>Delete Medical data</Text>
+          </TouchableOpacity>
+          </View>
+
         </ScrollView>
-      </View>
+      
+    </ImageBackground>
     </View>
   );
 }
@@ -341,54 +453,99 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     padding: 20,
+    flexDirection:'column',
+    alignItems:'center',
   },
   heading: {
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 30,
+    fontWeight: 'bold',
+    marginTop: -10,
     marginBottom: 20,
-    textAlign: "center",
+    textAlign: 'center',
+    color: 'teal',
   },
   inputContainer: {
     marginBottom: 20,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
+    //alignItems: "center",
   },
   label: {
-    fontWeight: "bold",
-    marginRight: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    color: 'teal',
   },
   input: {
-    height: 40,
-    borderColor: "gray",
+    height: 50,
+    width: 400,
+    borderColor: 'teal',
     borderWidth: 1,
-    borderRadius: 5,
+    borderRadius: 10,
+    backgroundColor: 'lightgoldenrodyellow',
     paddingHorizontal: 10,
-    flex: 1,
+    fontSize: 14,
+    color: 'black',
+    marginBottom: 20,
   },
   submitButton: {
-    backgroundColor: "blue",
-    paddingVertical: 15,
+    marginTop: 10,
+    backgroundColor: "teal",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     borderRadius: 5,
-    width: 200,
-    marginBottom: 20,
-    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: 'center',
+    height: 50,
+    width: 400,
+  },
+  SearchButton: {
+    marginTop: 10,
+    backgroundColor: "teal",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+    alignItems: "center",
+    justifyContent: 'center',
+    alignSelf: 'center',
+    height: 50,
+    width: 100,
   },
   submitButtonText: {
-    textAlign: "center",
-    color: "#fff",
-    fontWeight: "bold",
+    color: "white",
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   deleteButton: {
-    backgroundColor: "#ff0000",
-    paddingVertical: 15,
+    backgroundColor: "tomato",
+    padding: 10,
+    marginVertical: 10,
     borderRadius: 5,
-    width: 200,
-    marginBottom: 20,
-    alignSelf: "center",
+    height: 50,
+    width: 300,
+    marginHorizontal: 20,
   },
   deleteButtonText: {
+    color: "white",
     textAlign: "center",
-    color: "#fff",
     fontWeight: "bold",
   },
+  pickerContainer: {
+    borderColor: 'teal',
+    borderWidth: 1,
+    borderRadius: 10,
+    marginBottom: 20,
+    width: 400,
+    overflow: 'hidden', 
+  },
+  picker: {
+    height: 50,
+    backgroundColor: 'lightgoldenrodyellow',
+    paddingHorizontal: 10,
+    fontSize: 14,
+    color: 'black',
+  },
+  deleteContainer:{
+    flexDirection:'row',
+    marginTop: 15,
+  }
 });

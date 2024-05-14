@@ -10,6 +10,7 @@ import { Table, Row } from 'react-native-table-component';
 import * as Font from 'expo-font';
 import BG_Nurse_Profile from "../Nurse_Comp_Images/BG_Nurse_Profile.gif";
 import Nurse_Pic from "../Nurse_Comp_Images/Nurse_Pic.png";
+import LoadingScreen from '../Loading';
 
 export default function NurseProfile({ navigation }) {
     const { email } = useEmail();
@@ -19,7 +20,8 @@ export default function NurseProfile({ navigation }) {
     const [nurseId, setNurseId] = useState(null); 
     const [tableHead, setTableHead] = useState(['Day', 'Start Time', 'End Time']);
     const [tableData, setTableData] = useState([]);  
-  
+    const [isLoading,setIsLoading] = useState(false);
+
     const toggleSidebar = () => {
       setIsSidebarOpen(!isSidebarOpen);
     };
@@ -37,8 +39,21 @@ export default function NurseProfile({ navigation }) {
           setNurseId(nurseId);
           setNurseDetails(response.data);
         } catch (error) {
+          if(error.response && error.response.status===500)
+                {
+                Alert.alert(
+                  'Error',
+                  'Session Expired !!Please Log in again',
+                  [
+                    { text: 'OK', onPress: () => {
+                      AsyncStorage.removeItem('token');
+                      navigation.navigate("HomePage")} }
+                  ],
+                  { cancelable: false }
+                );
+              }else{
           console.error('Error fetching nurse details:', error);
-        }
+        }}
       };
       fetchNurseDetails();
     }, [nurseId]);
@@ -57,8 +72,21 @@ export default function NurseProfile({ navigation }) {
           const formattedData = response.data.map(item => [item.day, item.start_time, item.end_time]);
           setTableData(formattedData);
         } catch (error) {
+          if(error.response && error.response.status===500)
+                {
+                Alert.alert(
+                  'Error',
+                  'Session Expired !!Please Log in again',
+                  [
+                    { text: 'OK', onPress: () => {
+                      AsyncStorage.removeItem('token');
+                      navigation.navigate("HomePage")} }
+                  ],
+                  { cancelable: false }
+                );
+              }else{
           console.error('Error fetching nurse schedule:', error);
-        }
+        }}
       };
   
       fetchNurseSchedule();
@@ -117,7 +145,10 @@ export default function NurseProfile({ navigation }) {
   
   console.log(nurseSched); // Output the formed calendar events
   
-  
+    if(!nurseSchedule || !nurseDetails)
+    {
+      return <LoadingScreen/>
+    }
   
     return (
       <View style={styles.container}>
@@ -149,14 +180,14 @@ export default function NurseProfile({ navigation }) {
                     <Text style={styles.detailLabel}>Email:</Text>
                     <Text style={styles.detailValue}>{nurseDetails.email}</Text>
                   </View>
+                  <Image
+                                    source={{ uri: nurseDetails.photo }}
+                                    style={styles.nurseImage}
+                                />
                 </>
               ) : (
                 <Text>Loading nurse details...</Text>
               )}
-              <Image
-                source={Nurse_Pic}
-                style={styles.nurseImage}
-              />
             </ImageBackground>
             <View style={styles.scheduleContainer}>
               <Text style={styles.scheduleHeading}>Your Weekly Schedule:</Text>

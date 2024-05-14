@@ -10,6 +10,8 @@ import { API_BASE_URL } from '../config';
 import { Table, Row, Rows } from 'react-native-table-component';
 import { FontAwesome } from '@expo/vector-icons';
 import BG_PastHistory from "../Nurse_Comp_Images/BG_PastHistory.png";
+import { useConsent } from '../Context/ConsentContext';
+import LoadingScreen from '../Loading';
 
 // Define icons for previous and next
 const previousIcon = '<<';
@@ -18,11 +20,14 @@ const nextIcon = '>>';
 export default function ViewPastHistory({ navigation, route }) {
     const { email } = useEmail();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
     const [pastHistories, setPastHistories] = useState([]);
     const patientId = route.params.patientId;
+    const {consentToken} = useConsent();
     const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(8); // Example value
+    const [itemsPerPage, setItemsPerPage] = useState(6); // Example value
+    const photo = null;
+    const[loading,setLoading] = useState(false);
 
     const SemicircleBackground = ({ children, style }) => {
         return (
@@ -36,19 +41,34 @@ export default function ViewPastHistory({ navigation, route }) {
     useEffect(() => {
         const fetchPastHistories = async () => {
             try {
+                setLoading(true);
                 const token = await AsyncStorage.getItem('token');
-                const response = await axios.get(`${API_BASE_URL}/nurse/viewPastHistory/${patientId}`,{
+                const response = await axios.get(`${API_BASE_URL}/nurse/viewPastHistory/${patientId}/${consentToken}`,{
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
                 });
                 setIsLoading(false);
                 setPastHistories(response.data);
+                setLoading(false);
             } catch (error) {
+                setLoading(false);
+                if(error.response && error.response.status===500)
+                      {
+                      Alert.alert(
+                        'Error',
+                        'Session Expired !!Please Log in again',
+                        [
+                          { text: 'OK', onPress: () => {
+                            AsyncStorage.removeItem('token');
+                            navigation.navigate("HomePage")} }
+                        ],
+                        { cancelable: false }
+                      );
+                    }else{
                 console.error('Error fetching past histories:', error);
-                setIsLoading(false);
-            }
-        };
+              }}
+            };
         if (isLoading)
             fetchPastHistories();
     }, [patientId, isLoading]);
@@ -61,6 +81,8 @@ export default function ViewPastHistory({ navigation, route }) {
         return unsubscribe;
     }, [navigation]);
 
+    const totalPages = Math.ceil(pastHistories.length / itemsPerPage);
+
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentPastHistories = pastHistories.slice(indexOfFirstItem, indexOfLastItem);
@@ -71,7 +93,7 @@ export default function ViewPastHistory({ navigation, route }) {
     };
 
     const handleImage = (historyId) => {
-        navigation.navigate('AddPastImage', { patientId, historyId });
+        navigation.navigate('AddPastImage', { patientId, historyId, photo});
     };
 
     const handleDelete = async (historyId) => {
@@ -86,13 +108,31 @@ export default function ViewPastHistory({ navigation, route }) {
             setPastHistories(prevHistories => prevHistories.filter(history => history.id !== historyId));
             navigation.navigate('viewPastHistory',{ patientId });
         } catch (error) {
+            if(error.response && error.response.status===500)
+                  {
+                  Alert.alert(
+                    'Error',
+                    'Session Expired !!Please Log in again',
+                    [
+                      { text: 'OK', onPress: () => {
+                        AsyncStorage.removeItem('token');
+                        navigation.navigate("HomePage")} }
+                    ],
+                    { cancelable: false }
+                  );
+                }else{
             console.error('Error deleting past history:', error);
-        }
+          }}
     };
 
     const showAlert = (title, message) => {
         Alert.alert(title, message, [{ text: 'OK' }]);
     };
+
+    if(loading || !pastHistories)
+    {
+        return <LoadingScreen/>
+    }
 
     return (
         <View style={styles.container}>
@@ -104,7 +144,7 @@ export default function ViewPastHistory({ navigation, route }) {
                     <View style={styles.tableContainer}>
                         <Table>
                             <Row data={['S.No', 'Disease', 'Medicine', 'Dosage', 'Recorded On', 'Remarks', 'Action']} style={styles.tableHeader} textStyle={styles.headerText} />
-                            {currentPastHistories.map((history, index) => (
+                            {currentPastHistories && currentPastHistories.map((history, index) => (
                                 <Row
                                     key={index}
                                     data={[
@@ -134,16 +174,16 @@ export default function ViewPastHistory({ navigation, route }) {
                         </Table>
                     </View>
                     <View style={styles.pagination}>
-                        <TouchableOpacity onPress={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 1}>
-                            <Text style={[styles.paginationText, currentPage === 1 && styles.disabled]}>Previous</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.paginationText}>
-                            Page {currentPage} of {Math.ceil(pastHistories.length / itemsPerPage)}
-                        </Text>
-                        <TouchableOpacity onPress={() => setCurrentPage(currentPage + 1)} disabled={currentPage === 3}>
-                            <Text style={[styles.paginationText, currentPage === 3 && styles.disabled]}>Next</Text>
-                        </TouchableOpacity>
-                    </View>
+                <TouchableOpacity onPress={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 1}>
+                    <Text style={[styles.paginationText, currentPage === 1 && styles.disabled]}>{previousIcon} Previous</Text>
+                </TouchableOpacity>
+                <Text style={styles.paginationText}>
+                    Page {currentPage} of {totalPages}
+                </Text>
+                <TouchableOpacity onPress={() => setCurrentPage(currentPage + 1)} disabled={currentPage === totalPages}>
+                    <Text style={[styles.paginationText, currentPage === totalPages && styles.disabled]}>Next {nextIcon}</Text>
+                </TouchableOpacity>
+            </View>
                     <View style={styles.footerContainer}>
                         {/* Back button */}
                         <SemicircleBackground style={styles.lbackground}>

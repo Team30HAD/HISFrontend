@@ -32,6 +32,10 @@ export default function EditPastHistory({ navigation, route }) {
         fetchOldPastHistory();
     }, []);
 
+    const renderErrorMessage = (errorMessage) => (
+        <Text style={[styles.errorMessage, { color: 'red' }]}>{errorMessage}</Text>
+    );
+
     const fetchOldPastHistory = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
@@ -43,11 +47,32 @@ export default function EditPastHistory({ navigation, route }) {
             const oldpastHistory = response.data;
             console.log(oldpastHistory);
             // Ensure recordedAt is converted to Date object
-            oldpastHistory.recordedAt = new Date(oldpastHistory.selectedDate.getFullYear(), oldpastHistory.selectedDate.getMonth(), oldpastHistory.selectedDate.getDate());
-            setPastHistory(oldpastHistory);
+            // oldpastHistory.recordedAt = new Date(oldpastHistory.selectedDate.getFullYear(), oldpastHistory.selectedDate.getMonth(), oldpastHistory.selectedDate.getDate());
+            // setPastHistory(oldpastHistory);
+            setPastHistory({
+                disease: oldpastHistory.disease || '',
+                dosage: oldpastHistory.dosage || '',
+                medicine: oldpastHistory.medicine || '',
+                recordedAt: oldpastHistory.recordedAt ? new Date(oldpastHistory.recordedAt) : new Date(),
+                remarks: oldpastHistory.remarks || ''
+            });
+            
         } catch (error) {
-            console.error('Error fetching old past history:', error);
-        }
+            if(error.response && error.response.status===500)
+            {
+            Alert.alert(
+              'Error',
+              'Session Expired !!Please Log in again',
+              [
+                { text: 'OK', onPress: () => {
+                  AsyncStorage.removeItem('token');
+                  navigation.navigate("HomePage")} }
+              ],
+              { cancelable: false }
+            );
+          }else{
+            console.error('Error fetching past history:', error);
+        }}
     };
     
     
@@ -92,15 +117,28 @@ export default function EditPastHistory({ navigation, route }) {
             console.log('Past history edited successfully:', response.data);
             Alert.alert("Past History Edited successfully");
             setPastHistory({
-                disease: '',
-                dosage: '',
-                medicine: '',
-                recordedAt: new Date(),
-                remarks: '',
+                disease: pastHistory.disease || '',
+                dosage: pastHistory.dosage || '',
+                medicine: pastHistory.medicine || '',
+                recordedAt: pastHistory.recordedAt ? new Date(pastHistory.recordedAt) : new Date(),
+                remarks: pastHistory.remarks || ''
             });
         } catch (error) {
+            if(error.response && error.response.status===500)
+            {
+            Alert.alert(
+              'Error',
+              'Session Expired !!Please Log in again',
+              [
+                { text: 'OK', onPress: () => {
+                  AsyncStorage.removeItem('token');
+                  navigation.navigate("HomePage")} }
+              ],
+              { cancelable: false }
+            );
+          }else{
             console.error('Error editing past history:', error);
-        }
+        }}
     };
 
     const validateInputs = () => {
@@ -159,6 +197,7 @@ export default function EditPastHistory({ navigation, route }) {
                                         placeholder="Disease"
                                     />
                                 </View>
+                                {pastHistory.disease !== '' && !/^[a-zA-Z\s]+$/.test(pastHistory.disease) && renderErrorMessage('Disease Name must contain only alphabets and spaces.')}
                                 <View style={styles.inputContainer}>
                                     <Text style={styles.label}>Medicine:</Text>
                                     <TextInput
@@ -168,6 +207,7 @@ export default function EditPastHistory({ navigation, route }) {
                                         placeholder="Medicine"
                                     />
                                 </View>
+                                {pastHistory.medicine !== '' && !/^[a-zA-Z0-9\s]+$/.test(pastHistory.medicine) && renderErrorMessage('Medicine Name must contain only alphabets,numbers and spaces.')}
                             </View>
                             <View style={styles.inputColumn}>
                                 <View style={styles.inputContainer}>
@@ -179,6 +219,7 @@ export default function EditPastHistory({ navigation, route }) {
                                         placeholder="Dosage"
                                     />
                                 </View>
+                                {pastHistory.dosage !== '' && ! /^\d+\s(mg|mcg)$/.test(pastHistory.dosage) && renderErrorMessage('Dosage should be in the format of e.g: 20 mg/mcg')}
                                 <View style={styles.inputContainer}>
                                 <Text style={styles.label}>Recorded At:</Text>
                                 <TouchableOpacity style={styles.input} onPress={() => setShowCalendar(true)}>
@@ -211,6 +252,7 @@ export default function EditPastHistory({ navigation, route }) {
                                 numberOfLines={4}
                             />
                         </View>
+                        {pastHistory.remarks !== '' && !/^[a-zA-Z\s]+$/.test(pastHistory.remarks) && renderErrorMessage('Remarks must contain only alphabets and spaces.')}
                         <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
                             <Text style={styles.submitButtonText}>Submit</Text>
                         </TouchableOpacity>

@@ -11,14 +11,11 @@ import SliderImage1 from './Landscape.jpg';
 import { useNavigation } from '@react-navigation/native'; // Import useNavigation hook for navigation
 
 export default function Home() {
-  const [selectedRole, setSelectedRole] = useState('');
+  const [selectedRole, setSelectedRole] = useState("");
   const navigation = useNavigation(); 
 
   const handleLogin = (role) => {
-    console.log(role);
-    console.log(`Logging in as ${role}`);
     setSelectedRole(role);
-    console.log(selectedRole);
     navigation.navigate('Login', {role}); 
     //navigation.navigate('Login',selectedRole);
     // Redirect to Nurse login page

@@ -4,11 +4,15 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { FontAwesome } from "@expo/vector-icons"; // Import FontAwesome icons
 import LogoImage from "../Nurse_Comp_Images/Logo.jpg";
 import { useNavigation } from '@react-navigation/native'; // Import useNavigation hook for navigation
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEmail } from "../Context/EmailContext";
+import { API_BASE_URL } from "../config";
 
 const NurseHeader = ({ onPress }) => {
   const [currentDate, setCurrentDate] = useState("");
   const [currentTime, setCurrentTime] = useState("");
-  const navigation = useNavigation(); // Get navigation object from the hook
+  const navigation = useNavigation(); 
+  const {email} = useEmail();
 
   useEffect(() => {
     
@@ -27,8 +31,37 @@ const NurseHeader = ({ onPress }) => {
     return () => clearInterval(interval);
   }, []);
 
+  const logoutUser = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        const response = await fetch(`${API_BASE_URL}/nurse/logout/${email}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (response.ok) {
+          await AsyncStorage.removeItem('token');
+          navigation.navigate('HomePage');
+        } else {
+          console.error('Failed to log out:', response.statusText);
+        }
+      } else {
+        console.error('Token not found in AsyncStorage');
+      }
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
   const navigateToScreen = (route) => () => {
-    navigation.navigate(route); // Navigate to the specified route
+    if (route === 'HomePage') {
+      logoutUser();
+    } else {
+      navigation.navigate(route);
+    }
   };
 
   
@@ -43,7 +76,7 @@ const NurseHeader = ({ onPress }) => {
       </View>
       <View style={styles.titleContainer}>
         <MaterialIcons name="mood" size={24} color="#fff" style={styles.icon} />
-        <Text style={styles.title}>Good day, Wellness Warrior!</Text>
+        <Text style={styles.title}>Good day!</Text>
       </View>
 
       <View>
@@ -70,7 +103,7 @@ const NurseHeader = ({ onPress }) => {
         <TouchableOpacity style={styles.iconButton}>
           <Ionicons name="mail-outline" size={30} color="lightcyan" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton} onPress={navigateToScreen('NurseLogin')}>
+        <TouchableOpacity style={styles.iconButton} onPress={navigateToScreen('HomePage')}>
           <Ionicons name="log-out-outline" size={30} color="lightcyan" />
         </TouchableOpacity>
       </View>

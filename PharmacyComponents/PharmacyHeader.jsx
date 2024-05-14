@@ -1,21 +1,57 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { FontAwesome } from "@expo/vector-icons"; 
+import { FontAwesome } from "@expo/vector-icons";
 import LogoImage from "../Nurse_Comp_Images/Logo.jpg";
-import { useNavigation } from '@react-navigation/native'; 
+import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEmail } from "../Context/EmailContext";
+import { API_BASE_URL } from "../config";
 
 const PharmacyHeader = ({ onPress }) => {
   const [currentDate, setCurrentDate] = useState("");
   const [currentTime, setCurrentTime] = useState("");
-  const navigation = useNavigation(); 
+  const navigation = useNavigation();
+  const { email } = useEmail();
+
+  const logoutUser = async () => {
+    try {
+      const token = await AsyncStorage.getItem("pharmacytoken");
+      if (token) {
+        const response = await fetch(
+          `${API_BASE_URL}/pharmacy/logout/${email}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        if (response.ok) {
+          await AsyncStorage.removeItem("pharmacytoken");
+          navigation.navigate("HomePage");
+        } else {
+          console.error("Failed to log out:", response.statusText);
+        }
+      } else {
+        console.error("Token not found in AsyncStorage");
+      }
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  };
 
   useEffect(() => {
-    
     const updateDateTime = () => {
       const now = new Date();
-      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const formattedDate = now.toLocaleDateString(undefined, options);
+      const options = {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      };
+      const formattedDate = now.toLocaleDateString(undefined, options);
       const formattedTime = now.toLocaleTimeString();
       setCurrentDate(formattedDate);
       setCurrentTime(formattedTime);
@@ -28,10 +64,12 @@ const PharmacyHeader = ({ onPress }) => {
   }, []);
 
   const navigateToScreen = (route) => () => {
-    navigation.navigate(route); 
+    if (route === "HomePage") {
+      logoutUser();
+    } else {
+      navigation.navigate(route);
+    }
   };
-
-  
 
   return (
     <View style={styles.header}>
@@ -71,7 +109,12 @@ const PharmacyHeader = ({ onPress }) => {
           <Ionicons name="mail-outline" size={30} color="lightcyan" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="log-out-outline" size={30} color="lightcyan"  onPress={navigateToScreen('HomePage')}/>
+          <Ionicons
+            name="log-out-outline"
+            size={30}
+            color="lightcyan"
+            onPress={navigateToScreen("HomePage")}
+          />
         </TouchableOpacity>
       </View>
     </View>
@@ -148,6 +191,5 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
 });
-
 
 export default PharmacyHeader;
